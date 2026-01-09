@@ -209,9 +209,7 @@ trained_model/KGAT/amazon-book/entitydim64_relationdim64_bi-interaction_64-32-16
 这些脚本用于 **研究/分析/解释** KGAT 的推荐与图结构，不影响前后端。
 
 - **脚本目录**：`kgat/visualization/scripts/`
-- **输出目录（默认）**：
-  - 一部分脚本输出到仓库根目录 `outputs/`
-  - 一部分脚本输出到 `kgat/visualization/outputs/`
+- **输出目录（默认）**：脚本输出到仓库根目录 `outputs/`
 
 > 注意：输出文件通常体积较大（尤其是 `.gexf`）。
 
