@@ -1,126 +1,254 @@
-# Knowledge Graph Attention Network
+## KGAT 推荐系统（训练 + 后端 API + 前端）
 
-这是本文的PyTorch和DGL实现：
->Xiang Wang, Xiangnan He, Yixin Cao, Meng Liu and Tat-Seng Chua (2019). KGAT: Knowledge Graph Attention Network for Recommendation. [Paper in ACM DL](https://dl.acm.org/authorize.cfm?key=N688414) or [Paper in arXiv](https://arxiv.org/abs/1905.07854). In KDD'19, Anchorage, Alaska, USA, August 4-8, 2019.
+本仓库是一个可复现的 KGAT（Knowledge Graph Attention Network）推荐系统项目，包含：
 
-你可以点击 [这里](https://github.com/xiangwang1223/knowledge_graph_attention_network) 找到论文作者的Tensorflow1.0的实现。
-PyTorch和DGL实现代码改自[这里](https://github.com/LunaBlack/KGAT-pytorch) 。
+- **KGAT 原始训练/推理代码**：`kgat/`（PyTorch + DGL）
+- **后端 API**：`backend/`（FastAPI + PostgreSQL）
+- **前端界面**：`frontend/`（Vue2 + Vue CLI 4）
 
-代码优点：
- * 整体框架搭建得很好，之后做实验也可以借鉴这个框架
- * 编程风格好，结构清晰，大致可分为参数、数据和模型三部分
- * 借用argparse编写了相对友好的命令行设置参数的接口
- * logging日志模块输出信息到控制台和文件
- * 在某个epoch达到一定效果时保存模型
- 
-代码缺点：
- * 大量重复的代码，显得臃肿
- * 测试集评估时，因为底层一些函数原因，把gpu中的张量放到cpu中执行，效率低
- * 一次性读取数据集，大量的全局变量，对内存和显存都不友好
+---
 
-## 介绍
+## 目录
 
-知识图注意力网络（KGAT）是专门针对知识感知的个性化推荐量身定制的新推荐框架。KGAT建立在图神经网络框架之上，对协作知识图中的高阶关系进行了明确的建模，以提供更好的项目侧信息推荐。
+- [快速复现](#快速复现)
+- [关键配置](#关键配置)
+- [后端 API 概览](#后端-api-概览)
+- [可选：启用 KGAT 模型推荐](#可选启用-kgat-模型推荐)
+- [可选：训练 KGAT 模型](#可选训练-kgat-模型)
+- [可选：可视化与分析脚本](#可选可视化与分析脚本)
+- [仓库结构](#仓库结构)
+- [引用与致谢](#引用与致谢)
 
-如果您想在研究中使用代码和数据集，请联系论文作者，并引用以下论文作为参考：
+---
+
+## 快速复现
+
+**不训练 KGAT**跑通“数据库 → 导入数据 → 后端 API → 前端页面”。
+
+### 0) 前置条件
+
+- **Python**：建议 3.10+
+- **Node.js**：建议 16.x
+- **Docker Desktop（推荐）**：一键启动 PostgreSQL（可选 Redis/Neo4j）
+
+### 1) 启动数据库（PostgreSQL）
+
+```powershell
+cd backend
+docker compose -f docker-compose-db.yml up -d
+docker compose -f docker-compose-db.yml ps
 ```
+
+> 不用 Docker 也可以本地安装 PostgreSQL，然后按 `backend/README.md` 中的 SQL 创建库与用户。
+
+### 2) 启动后端（FastAPI）
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+copy env.example .env
+python scripts/init_database.py
+python scripts/import_amazon_data.py --max-users 500 --max-kg-triples 5000 --skip-neo4j
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+验证：
+
+- 健康检查：`GET /health` → `{"status":"healthy"}`
+- Swagger：访问 `http://localhost:8000/docs`
+
+### 3) 启动前端（Vue2）
+
+```powershell
+cd frontend
+npm install
+npm run serve
+```
+
+如果 Node 17+ 遇到 OpenSSL 报错，使用：
+
+```bash
+npm run serve:legacy
+```
+
+访问：
+
+- 前端：`http://localhost:8080`
+- 后端：`http://127.0.0.1:8000`
+
+---
+
+## 关键配置
+
+### 后端 `.env`
+
+在 `backend/` 下由模板生成：
+
+```powershell
+cd backend
+copy env.example .env
+```
+
+默认：
+
+- `USE_KGAT_MODEL=False`
+- `USE_NEO4J=False`
+
+### PostgreSQL
+
+```sql
+CREATE DATABASE kgat_recommendation;
+CREATE USER postgres WITH PASSWORD 'kgat_password';
+GRANT ALL PRIVILEGES ON DATABASE kgat_recommendation TO postgres;
+\c kgat_recommendation
+GRANT ALL ON SCHEMA public TO postgres;
+```
+
+`.env` 对应：
+
+```env
+DATABASE_URL=postgresql://postgres:kgat_password@localhost:5432/kgat_recommendation
+```
+
+### 前端代理
+
+前端开发环境通过 `frontend/vue.config.js` 代理：
+
+- `/api/*` → `http://127.0.0.1:8000/api/*`
+
+这样前端页面里只需要请求 `/api/...`，无需处理跨域。
+
+---
+
+## 后端 API 概览
+
+### 认证（JWT）
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`（OAuth2 form：`username=...&password=...`）
+- `GET /api/auth/me`
+
+前端会把 token 存在 `localStorage`，并在 `frontend/src/main.js` 中通过 Axios 拦截器注入：
+
+- `Authorization: Bearer <token>`
+
+### 商品（RESTful）
+
+- `GET /api/items/`（分页/搜索/分类筛选）
+- `GET /api/items/{item_id}`
+
+### 推荐
+
+- `GET /api/recommendations/me?limit=...`
+- `GET /api/recommendations/popular?limit=...`（无需登录）
+- `POST /api/recommendations/record-interaction`
+
+### 兼容接口（待补充数据库）
+
+- `POST /api/product/getAllProduct`
+- `POST /api/product/getProductByCategory`
+- `POST /api/product/getProductBySearch`
+- `POST /api/product/getDetails`
+- `POST /api/product/getDetailsPicture`
+- `POST /api/product/getPromoProduct`
+- `POST /api/product/getHotProduct`
+- `POST /api/product/getCategory`
+
+对应实现主要在：`backend/app/api/product.py`（映射到 `items` 的查询）。
+
+---
+
+## 可选：启用 KGAT 模型推荐
+
+默认后端使用轻量级算法（ItemCF）即可运行。若你已有训练好的 KGAT 模型，想在后端启用 KGAT：
+
+### 1) 安装 KGAT 相关依赖
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-kgat.txt
+```
+
+> Windows 上安装 `dgl` 可能需要额外 wheel 源（不同 CPU/GPU 版本不同）。如遇安装失败，请以 DGL 官方安装说明为准。
+
+### 2) 配置 `.env`
+
+```env
+USE_KGAT_MODEL=True
+USE_GPU=False
+MODEL_PATH=trained_model/KGAT/amazon-book/.../model_epochXX.pth
+```
+
+### 3) 验证模型加载（可选）
+
+```powershell
+cd backend
+python scripts/init_kgat_model.py
+```
+
+---
+
+## 可选：训练 KGAT 模型
+
+原始训练脚本在 `kgat/` 下，建议在虚拟环境中单独安装训练依赖（torch + dgl）。
+
+示例（amazon-book）：
+
+```powershell
+cd kgat
+python main_kgat.py --data_name amazon-book --n_epoch 50
+```
+
+训练输出通常在 `trained_model/` 下，模型路径会类似：
+
+```
+trained_model/KGAT/amazon-book/entitydim64_relationdim64_bi-interaction_64-32-16_lr0.0001_pretrain1/model_epoch{epoch}.pth
+```
+
+然后按上文把 `MODEL_PATH` 配进 `backend/.env` 即可让后端加载。
+
+---
+
+## 可选：可视化与分析脚本
+
+仓库内包含一些可视化/解释脚本与输出示例：
+
+- 脚本：`kgat/visualization/scripts/`
+- 输出：`kgat/visualization/outputs/`
+
+这些内容偏研究/分析用途，不影响运行前后端。
+
+---
+
+## 仓库结构
+
+```
+.
+├── backend/           # FastAPI 后端
+├── frontend/          # Vue2 前端
+├── kgat/              # KGAT 原始训练/推理代码
+├── datasets/          # 数据集（amazon-book 等）
+├── trained_model/     # 训练产物（示例模型/日志）
+```
+
+---
+
+## 引用与致谢
+
+KGAT 来源论文（KDD 2019）：
+
+```bibtex
 @inproceedings{KGAT19,
-  author    = {Xiang Wang and
-               Xiangnan He and
-               Yixin Cao and
-               Meng Liu and
-               Tat{-}Seng Chua},
+  author    = {Xiang Wang and Xiangnan He and Yixin Cao and Meng Liu and Tat{-}Seng Chua},
   title     = {{KGAT:} Knowledge Graph Attention Network for Recommendation},
   booktitle = {{KDD}},
   pages     = {950--958},
   year      = {2019}
 }
 ```
-代码中做了大量注释，如果对本代码有疑问，请联系我：
-```
-@author: Kang Xiatao (kangxiatao@gmail.com)
-```
-
-## 环境
-
-该代码已经过测试，可以在Python 3.8.5下运行。
-
-所需的软件包如下：
-* torch == 1.7.1
-* dgl-cu101 == 0.5.3
-* numpy == 1.18.5
-* pandas == 1.1.3
-* sklearn == 0.23.2
-
-## 运行
-
-* FM
-```
-python main_nfm.py --model_type fm --data_name amazon-book
-```
-* NFM
-```
-python main_nfm.py --model_type nfm --data_name amazon-book
-```
-* KGAT
-```
-python main_kgat.py --data_name amazon-book
-```
-## 数据集
-
-作者提供了三个数据集：Amazon-book, Last-FM, and Yelp2018.
-
-我爬取了豆瓣Top250制作了一个数据集：douban250
-
-* 作者用的是公开数据集，你能在这里找到完整的数据集 [Amazon-book](http://jmcauley.ucsd.edu/data/amazon), [Last-FM](http://www.cp.jku.at/datasets/LFM-1b/), [Yelp2018](https://www.yelp.com/dataset/challenge).
-* 豆瓣的数据集可能因为过于稀疏的原因，训练效果很差，有时间再重新制作整理一次
-
-| | | Amazon-book | Last-FM | Yelp2018 | douban250 |
-|:---:|:---|---:|---:|---:|---:|
-|User-Item Interaction| Users | 70,679 | 23,566 | 45,919| 4,422 |
-| | Items | 24,915 | 48,123 | 45,538| 250 |
-| | Interactions | 847,733 | 3,034,796 | 1,185,068| 55000 |
-|Knowledge Graph | Entities | 88,572 | 58,266 | 90,961| None |
-| | Relations | 39 | 9 | 42 | None |
-| | Triplets | 2,557,746 | 464,567 | 1,853,704| None |
-
-
-## 结果
-
-原代码中用到了多GPU训练，因条件受限，BPRMF,ECFKG,CKE暂时没有测试结果
-
-* `amazon-book`数据集：
-
-| Model | Valid Data             | Best Epoch | Precision@20         | Recall@20           | NDCG@20             |
-| :---: | :---                   | :---:      | :---:                | :---:               | :---:               |
-| FM    | sample 1000 test users | 65         | 0.014400000683963299 | 0.14490722119808197 | 0.07222465868746986 |
-| NFM   | sample 1000 test users | 52         | 0.013500000350177288 | 0.13786590099334717 | 0.07123670123284831 |
-| KGAT  | all test users         | 39         | 0.014916915994618973 | 0.1414667212776353  | 0.07478134080605618 |
-
-* `last-fm`数据集：
-
-| Model | Valid Data             | Best Epoch | Precision@20         | Recall@20           | NDCG@20             |
-| :---: | :---                   | :---:      | :---:                | :---:               | :---:               |
-| FM    | sample 1000 test users | 39         | 0.03400000184774399  | 0.0831719189882278  | 0.06556513877651045 |
-| NFM   | sample 1000 test users | 65         | 0.03230000287294388  | 0.0825699120759964  | 0.06412929073269483 |
-| KGAT  | all test users         | 82         | 0.03326826841464287  | 0.08198051536362484 | 0.07016461076103524 |
-
-* `yelp2018`数据集：
-
-| Model | Valid Data             | Best Epoch | Precision@20         | Recall@20           | NDCG@20             |
-| :---: | :---                   | :---:      | :---:                | :---:               | :---:               |
-| FM    | sample 1000 test users | 19         | 0.016450000926852226 | 0.06791889667510986 | 0.04011075919416859 |
-| NFM   | sample 1000 test users | 17         | 0.014950000680983067 | 0.0635601356625557  | 0.03876655643191971 |
-| KGAT  | all test users         | 16         | 0.016048173102794366 | 0.06584655151793856 | 0.04193551918102937 |
-
-## 相关论文
-
-* KGAT
-    * 提出了 [KGAT: Knowledge Graph Attention Network for Recommendation](https://arxiv.org/abs/1905.07854), KDD2019.
-    * 论文作者的实现：[https://github.com/xiangwang1223/knowledge_graph_attention_network](https://github.com/xiangwang1223/knowledge_graph_attention_network)
-    * 关键点:
-        * 在协作知识图中对高阶关系进行建模，以提供带有项边信息的更好推荐。
-        * 依次训练KG部分和CF部分。
-        
 
 

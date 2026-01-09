@@ -1,0 +1,14 @@
+# KGAT / 图神经网络相关依赖（可选）
+#
+# 说明：
+# - 不需要 KGAT 时无需安装本文件，保持 requirements.txt 即可运行后端 API（轻量级推荐算法）
+# - Windows/CPU 安装 dgl 通常需要额外的 wheel 源（见 backend/README.md）
+
+torch==2.3.0
+torchvision==0.18.0
+torchaudio==2.3.0
+torchdata==0.7.1
+
+dgl==2.2.1
+
+
