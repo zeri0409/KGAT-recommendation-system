@@ -2,7 +2,7 @@
 #
 # 说明：
 # - 不需要 KGAT 时无需安装本文件，保持 requirements.txt 即可运行后端 API（轻量级推荐算法）
-# - Windows/CPU 安装 dgl 通常需要额外的 wheel 源（见 backend/README.md）
+# - Windows/CPU 安装 dgl 通常需要额外的 wheel 源（见仓库根目录 README.md）
 
 torch==2.3.0
 torchvision==0.18.0
