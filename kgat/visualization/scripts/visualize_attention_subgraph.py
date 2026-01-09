@@ -364,39 +364,6 @@ def main():
     nx.write_gexf(G, gexf_path)
     print(f"[OK] Saved: {gexf_path}", flush=True)
     
-    # 打印 Gephi 使用指南
-    print("\n" + "="*60, flush=True)
-    print("📊 Gephi 可视化指南:", flush=True)
-    print("="*60, flush=True)
-    print(f"""
-1. 打开 Gephi，导入文件: {gexf_path}
-
-2. 布局 (Layout):
-   - 选择 "Force Atlas 2" 或 "Fruchterman Reingold"
-   - 运行布局直到图稳定
-
-3. 边粗细 (Edge Thickness):
-   - 在 "Appearance" 面板 -> "Edges" -> "Size"
-   - 选择 "Ranking" -> 属性选 "weight"
-   - 设置 Min: 0.5, Max: 5
-
-4. 节点颜色 (Node Color):
-   - 颜色已预设: User(红)、Item(蓝)、Entity(绿)
-   - 或在 "Appearance" -> "Nodes" -> "Color" -> "Partition"
-   - 选择 "node_type" 属性
-
-5. 节点大小 (Node Size):
-   - 中心用户节点已设为较大
-   - 可在 "Appearance" -> "Nodes" -> "Size" 调整
-
-6. 边标签 (Edge Labels):
-   - 在 "Data Laboratory" 中查看 "relation" 属性
-   - 可在边上显示关系类型
-
-7. 导出:
-   - File -> Export -> SVG/PNG/PDF
-""", flush=True)
-    
     # 打印 attention 统计
     att_values = [e[3] for e in edges]
     print("\n📈 Attention 统计:", flush=True)
