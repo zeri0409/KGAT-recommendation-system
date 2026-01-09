@@ -1,10 +1,12 @@
-## KGAT 推荐系统（训练 + 后端 API + 前端）
+## KGAT 推荐系统
 
 本仓库是一个可复现的 KGAT（Knowledge Graph Attention Network）推荐系统项目，包含：
 
 - **KGAT 原始训练/推理代码**：`kgat/`（PyTorch + DGL）
 - **后端 API**：`backend/`（FastAPI + PostgreSQL）
 - **前端界面**：`frontend/`（Vue2 + Vue CLI 4）
+
+注： 2025 秋社交网络挖掘期末课程设计，代码仅供参考。
 
 ---
 
@@ -215,12 +217,47 @@ trained_model/KGAT/amazon-book/entitydim64_relationdim64_bi-interaction_64-32-16
 
 ## 可选：可视化与分析脚本
 
-仓库内包含一些可视化/解释脚本与输出示例：
+这些脚本用于 **研究/分析/解释** KGAT 的推荐与图结构，不影响“跑通前后端”。
 
-- 脚本：`kgat/visualization/scripts/`
-- 输出：`kgat/visualization/outputs/`
+- **脚本目录**：`kgat/visualization/scripts/`
+- **输出目录（默认）**：
+  - 一部分脚本输出到仓库根目录 `outputs/`
+  - 一部分脚本输出到 `kgat/visualization/outputs/`
 
-这些内容偏研究/分析用途，不影响运行前后端。
+> 注意：输出文件通常体积较大（尤其是 `.gexf`），建议不要提交到 Git；需要时可通过脚本重新生成。
+
+### 脚本清单（用途与期望输出）
+
+| 脚本 | 作用 | 期望输出（默认路径） |
+|---|---|---|
+| `export_kg.py` | 从数据集导出“协作知识图 CKG”的边列表与图文件，供 Gephi 等工具查看整体结构（可抽样） | `outputs/kg_export/kg_edge_list.csv`、`outputs/kg_export/kg_graph.gexf` |
+| `pseudo_social.py` | 基于“共同交互”构造伪社交用户图：共现边（次数）与余弦相似边（可 TopK 截断/抽样） | `outputs/pseudo_social/cooc_edge_list.csv`、`outputs/pseudo_social/cooc_graph.gexf`、`outputs/pseudo_social/cosine_edge_list.csv`、`outputs/pseudo_social/cosine_graph.gexf` |
+| `visualize_attention_subgraph.py` | 对指定用户抽取 2-hop 子图，按 attention 权重输出可视化图（边权/颜色/标签等） | `outputs/attention_viz/user{U}_edge_list.csv`、`outputs/attention_viz/user{U}_node_list.csv`、`outputs/attention_viz/user{U}_attention_subgraph.gexf` |
+| `recommend_users.py` | 用训练好的 KGAT checkpoint 给指定用户生成 Top-K 推荐，导出 TSV | `outputs/recs_user0_10.tsv`（可用 `--out` 改） |
+| `explain_top_hit_users.py` | 按 hit@K 选 Top-N 用户，并对其 Top-M 推荐做解释：KG 高 attention 路径 + cooc 邻居支持 | `outputs/top_hit_users_top5.tsv`、`outputs/top_hit_users_top5_explanations.md` |
+| `generate_enhanced_report.py` | 基于 `top_hit_users_top5.tsv` 生成“增强版解释报告”：KGAT 原理 + 共享实体分析 + 邻居支持分析 | `outputs/top_hit_users_top5_explanations_enhanced.md` |
+
+### 运行示例
+
+```bash
+# 1) 导出 CKG（抽样节点，默认写到 outputs/kg_export/）
+python kgat/visualization/scripts/export_kg.py --data_dir datasets/amazon-book --max_nodes 20000
+
+# 2) 构造伪社交图（默认写到 outputs/pseudo_social/）
+python kgat/visualization/scripts/pseudo_social.py --train_file datasets/amazon-book/train1.txt --out_dir outputs/pseudo_social --topk_cosine 30 --min_co 2
+
+# 3) 生成指定用户的 attention 子图（需要模型 checkpoint 与 torch+dgl 环境）
+python kgat/visualization/scripts/visualize_attention_subgraph.py --model_path trained_model/model_epoch44.pth --user 0 --device cpu
+
+# 4) 生成用户推荐 TSV（需要模型 checkpoint 与 torch+dgl 环境）
+python kgat/visualization/scripts/recommend_users.py --model_path trained_model/model_epoch44.pth --users 0-10 --topk 20 --device cpu
+
+# 5) 解释命中用户（需要先有 pseudo_social_sampled/cooc_edge_list.csv 或调整 --cooc_csv）
+python kgat/visualization/scripts/explain_top_hit_users.py --model_path trained_model/model_epoch44.pth --device cpu
+
+# 6) 生成增强版解释报告（依赖 outputs/top_hit_users_top5.tsv）
+python kgat/visualization/scripts/generate_enhanced_report.py
+```
 
 ---
 
