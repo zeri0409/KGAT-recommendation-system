@@ -10,3 +10,6 @@ datasets/yelp2018/_rel_ecount
 __pycache__
 trained_model/
 
+# 可视化输出（体积大，不应入库；可由脚本重新生成）
+visualization/outputs/
+
