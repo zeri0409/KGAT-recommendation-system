@@ -29,7 +29,7 @@
 
 - **Python**：建议 3.10+
 - **Node.js**：建议 16.x
-- **Docker Desktop（推荐）**：一键启动 PostgreSQL（可选 Redis/Neo4j）
+- **Docker Desktop**：一键启动 PostgreSQL（可选 Redis/Neo4j）
 
 ### 1) 启动数据库（PostgreSQL）
 
