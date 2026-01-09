@@ -27,6 +27,7 @@ wheels/
 # 环境变量
 .env
 .env.local
+.env.backup
 
 # IDE
 .vscode/
